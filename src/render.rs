@@ -157,8 +157,8 @@ impl<R: gfx::Resources> Material<R> {
     }
 }
 
-pub struct Object<R: gfx::Resource> {
+pub struct Object<R: gfx::Resources> {
     vertex_buffer: Buffer<R, Vertex>,
     slice: gfx::Slice<R>,
-    pub materail: Material,
+    pub materail: Material<R>,
 }
