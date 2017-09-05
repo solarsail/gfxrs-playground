@@ -53,16 +53,17 @@ fn main() {
     let cube = render::Object::new(
         &mut factory,
         model::vertices(),
-        cgmath::Matrix4::identity(),
+        Matrix4::identity(),
         material,
     );
     let cube_brush = render::ObjectBrush::new(&mut factory);
 
     let light_pos = Vector3::new(1.2, 1.0, 2.0);
+    let light_color = Vector3::new(1.0, 1.0, 1.0);
     let trans = Matrix4::from_translation(light_pos);
     let scale = Matrix4::from_scale(0.2);
     let light_model = trans * scale;
-    let lamp = render::Lamp::new(&mut factory, model::vertices(), light_model, Vector3::new(1.0, 1.0, 1.0));
+    let lamp = render::Lamp::new(&mut factory, model::vertices(), light_model, light_color.clone());
     let lamp_brush = render::LampBrush::new(&mut factory);
 
     // Game loop
@@ -133,7 +134,6 @@ fn main() {
         //let elapsed = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1e9;
         cs.run(&mut context, dt);
 
-        let light_color = Vector3::new(1.0, 1.0, 1.0);
         let obj_light = render::Light::new(
             (light_color * 0.1).into(),
             (light_color * 0.5).into(),
