@@ -60,4 +60,8 @@ impl CameraSystem {
     pub fn position(&self) -> Point3<f32> {
         self.camera.pos()
     }
+
+    pub fn camera(&self) -> Camera {
+        self.camera.clone()
+    }
 }

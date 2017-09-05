@@ -11,7 +11,6 @@ extern crate lazy_static;
 use std::time;
 use gfx::Device;
 use glutin::GlContext;
-use gfx::traits::FactoryExt;
 use cgmath::{Matrix4, Point3, Vector3};
 use cgmath::prelude::*;
 
@@ -45,49 +44,26 @@ fn main() {
         );
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 
-    let obj_pso = factory
-        .create_pipeline_simple(
-            include_bytes!("shader/obj_vertex.glsl"),
-            include_bytes!("shader/obj_fragment.glsl"),
-            render::pipe::new(),
-        )
-        .unwrap();
-    let light_pso = factory
-        .create_pipeline_simple(
-            include_bytes!("shader/light_vertex.glsl"),
-            include_bytes!("shader/light_fragment.glsl"),
-            render::light_pipe::new(),
-        )
-        .unwrap();
+    let material = render::Material::new(
+        &mut factory,
+        "textures/container2.png",
+        "textures/container2_specular.png",
+        32.0,
+    );
+    let cube = render::Object::new(
+        &mut factory,
+        model::vertices(),
+        cgmath::Matrix4::identity(),
+        material,
+    );
+    let cube_brush = render::ObjectBrush::new(&mut factory);
 
-    let (obj_vertex_buffer, obj_slice) =
-        factory.create_vertex_buffer_with_slice(model::vertices().as_slice(), ());
-    let (light_vertex_buffer, light_slice) =
-        factory.create_vertex_buffer_with_slice(model::vertices().as_slice(), ());
-    let obj_trans_buffer = factory.create_constant_buffer(1);
-    let light_trans_buffer = factory.create_constant_buffer(1);
-    let obj_light_buffer = factory.create_constant_buffer(1);
-
-    let diffuse_map = render::load_texture(&mut factory, "textures/container2.png");
-    let specular_map = render::load_texture(&mut factory, "textures/container2_specular.png");
-    let sampler = factory.create_sampler_linear();
-
-    let mut obj_data = render::pipe::Data {
-        vbuf: obj_vertex_buffer,
-        transform: obj_trans_buffer,
-        light: obj_light_buffer,
-        shininess: 32.0,
-        diffuse: (diffuse_map, sampler.clone()),
-        specular: (specular_map, sampler.clone()),
-        out: render_target.clone(),
-        out_depth: depth_stencil.clone(),
-    };
-    let mut light_data = render::light_pipe::Data {
-        vbuf: light_vertex_buffer,
-        transform: light_trans_buffer,
-        out: render_target.clone(),
-        out_depth: depth_stencil.clone(),
-    };
+    let light_pos = Vector3::new(1.2, 1.0, 2.0);
+    let trans = Matrix4::from_translation(light_pos);
+    let scale = Matrix4::from_scale(0.2);
+    let light_model = trans * scale;
+    let lamp = render::Lamp::new(&mut factory, model::vertices(), light_model, Vector3::new(1.0, 1.0, 1.0));
+    let lamp_brush = render::LampBrush::new(&mut factory);
 
     // Game loop
     //let start_time = time::Instant::now();
@@ -97,7 +73,6 @@ fn main() {
         .aspect(SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32)
         .build();
 
-    let light_pos = Vector3::new(1.2, 1.0, 2.0);
 
     let mut context = Context::new(&window, SCREEN_WIDTH, SCREEN_HEIGHT);
     let mut cs = CameraSystem::new(camera, 0.1);
@@ -148,16 +123,6 @@ fn main() {
                     }
                     Resized(w, h) => {
                         context.update_dimensions(w, h);
-                        gfx_window_glutin::update_views(
-                            &window,
-                            &mut obj_data.out,
-                            &mut obj_data.out_depth,
-                        );
-                        gfx_window_glutin::update_views(
-                            &window,
-                            &mut light_data.out,
-                            &mut light_data.out_depth,
-                        );
                     }
                     _ => {}
                 }
@@ -168,22 +133,6 @@ fn main() {
         //let elapsed = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1e9;
         cs.run(&mut context, dt);
 
-        let projection = cs.projection_matrix();
-        let view = cs.view_matrix();
-        let obj_model = Matrix4::identity();
-        let trans = Matrix4::from_translation(light_pos);
-        let scale = Matrix4::from_scale(0.2);
-        let light_model = trans * scale;
-        let obj_translation = render::Transform {
-            model: obj_model.into(),
-            view: view.into(),
-            projection: projection.into(),
-        };
-        let light_translation = render::Transform {
-            model: light_model.into(),
-            view: view.into(),
-            projection: projection.into(),
-        };
         let light_color = Vector3::new(1.0, 1.0, 1.0);
         let obj_light = render::Light::new(
             (light_color * 0.1).into(),
@@ -192,19 +141,11 @@ fn main() {
             light_pos.into(),
         );
 
+        let camera = cs.camera();
         encoder.clear(&render_target, render::BLACK);
         encoder.clear_depth(&depth_stencil, 1.0);
-        encoder
-            .update_buffer(&obj_data.transform, &[obj_translation], 0)
-            .unwrap();
-        encoder
-            .update_buffer(&obj_data.light, &[obj_light], 0)
-            .unwrap();
-        encoder
-            .update_buffer(&light_data.transform, &[light_translation], 0)
-            .unwrap();
-        encoder.draw(&obj_slice, &obj_pso, &obj_data);
-        encoder.draw(&light_slice, &light_pso, &light_data);
+        cube_brush.draw(&cube, &obj_light, &camera, &render_target, &depth_stencil, &mut encoder);
+        lamp_brush.draw(&lamp, &camera, &render_target, &depth_stencil, &mut encoder);
         encoder.flush(&mut device);
         window.swap_buffers().unwrap();
         device.cleanup();

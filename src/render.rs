@@ -1,9 +1,11 @@
 use gfx;
 use image;
 use find_folder::Search;
-use gfx::handle::{Buffer, Sampler, ShaderResourceView, RenderTargetView, DepthStencilView};
+use gfx::handle::{Buffer, DepthStencilView, RenderTargetView, Sampler, ShaderResourceView};
 use gfx::format::Formatted;
 use gfx::traits::FactoryExt;
+use cgmath;
+use camera::Camera;
 
 pub type ColorFormat = gfx::format::Srgba8;
 pub type ShaderType = <ColorFormat as Formatted>::View;
@@ -46,9 +48,10 @@ gfx_defines! {
         out_depth: gfx::DepthTarget<DepthFormat> = gfx::preset::depth::LESS_EQUAL_WRITE,
     }
 
-    pipeline light_pipe {
+    pipeline lamp_pipe {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         transform: gfx::ConstantBuffer<Transform> = "Transform",
+        color: gfx::Global<[f32; 3]> = "light_color",
         out: gfx::RenderTarget<ColorFormat> = "FragColor",
         out_depth: gfx::DepthTarget<DepthFormat> = gfx::preset::depth::LESS_EQUAL_WRITE,
     }
@@ -74,10 +77,7 @@ impl Light {
     }
 }
 
-pub fn load_texture<F, R>(
-    factory: &mut F,
-    path: &str,
-) -> ShaderResourceView<R, ShaderType>
+pub fn load_texture<F, R>(factory: &mut F, path: &str) -> ShaderResourceView<R, ShaderType>
 where
     F: gfx::Factory<R>,
     R: gfx::Resources,
@@ -124,13 +124,38 @@ impl<R: gfx::Resources> ObjectBrush<R> {
 
     pub fn draw<C>(
         &self,
+        object: &Object<R>,
+        light: &Light,
+        camera: &Camera,
         render_target: &RenderTargetView<R, ColorFormat>,
         depth: &DepthStencilView<R, DepthFormat>,
         encoder: &mut gfx::Encoder<R, C>,
     ) where
         C: gfx::CommandBuffer<R>,
     {
-
+        encoder.update_constant_buffer(
+            &self.transform,
+            &Transform {
+                model: object.model_mat.into(),
+                view: camera.view_matrix().into(),
+                projection: camera.projection_matrix().into(),
+            },
+        );
+        encoder.update_constant_buffer(&self.light, &light);
+        encoder.draw(
+            &object.slice,
+            &self.pso,
+            &pipe::Data {
+                vbuf: object.vertex_buffer.clone(),
+                transform: self.transform.clone(),
+                light: self.light.clone(),
+                shininess: object.material.shininess,
+                diffuse: (object.material.diffuse.clone(), self.sampler.clone()),
+                specular: (object.material.specular.clone(), self.sampler.clone()),
+                out: render_target.clone(),
+                out_depth: depth.clone(),
+            },
+        );
     }
 }
 
@@ -146,7 +171,10 @@ impl<R: gfx::Resources> Material<R> {
         diffuse_texture_path: &str,
         specular_texture_path: &str,
         shininess: f32,
-    ) -> Material<R> where F: gfx::Factory<R> {
+    ) -> Material<R>
+    where
+        F: gfx::Factory<R>,
+    {
         let diffuse = load_texture(factory, diffuse_texture_path);
         let specular = load_texture(factory, specular_texture_path);
         Material {
@@ -158,7 +186,110 @@ impl<R: gfx::Resources> Material<R> {
 }
 
 pub struct Object<R: gfx::Resources> {
-    vertex_buffer: Buffer<R, Vertex>,
-    slice: gfx::Slice<R>,
-    pub materail: Material<R>,
+    pub vertex_buffer: Buffer<R, Vertex>,
+    pub slice: gfx::Slice<R>,
+    pub model_mat: cgmath::Matrix4<f32>,
+    pub material: Material<R>,
+}
+
+impl<R: gfx::Resources> Object<R> {
+    pub fn new<F>(
+        factory: &mut F,
+        vertices: Vec<Vertex>,
+        model_mat: cgmath::Matrix4<f32>,
+        material: Material<R>,
+    ) -> Object<R>
+    where
+        F: gfx::Factory<R>,
+    {
+        let (vertex_buffer, slice) =
+            factory.create_vertex_buffer_with_slice(vertices.as_slice(), ());
+        Object {
+            vertex_buffer,
+            slice,
+            model_mat,
+            material,
+        }
+    }
+}
+
+pub struct LampBrush<R: gfx::Resources> {
+    transform: Buffer<R, Transform>,
+    pso: gfx::pso::PipelineState<R, lamp_pipe::Meta>,
+}
+
+impl<R: gfx::Resources> LampBrush<R> {
+    pub fn new<F>(factory: &mut F) -> LampBrush<R>
+    where
+        F: gfx::Factory<R>,
+    {
+        let transform = factory.create_constant_buffer(1);
+        let pso = factory
+            .create_pipeline_simple(
+                include_bytes!("shader/light_vertex.glsl"),
+                include_bytes!("shader/light_fragment.glsl"),
+                lamp_pipe::new(),
+            )
+            .expect("Cannot create PSO for lamp");
+        LampBrush { transform, pso }
+    }
+
+    pub fn draw<C>(
+        &self,
+        lamp: &Lamp<R>,
+        camera: &Camera,
+        render_target: &RenderTargetView<R, ColorFormat>,
+        depth: &DepthStencilView<R, DepthFormat>,
+        encoder: &mut gfx::Encoder<R, C>,
+    ) where
+        C: gfx::CommandBuffer<R>,
+    {
+        encoder.update_constant_buffer(
+            &self.transform,
+            &Transform {
+                model: lamp.model_mat.into(),
+                view: camera.view_matrix().into(),
+                projection: camera.projection_matrix().into(),
+            },
+        );
+        encoder.draw(
+            &lamp.slice,
+            &self.pso,
+            &lamp_pipe::Data {
+                vbuf: lamp.vertex_buffer.clone(),
+                transform: self.transform.clone(),
+                color: lamp.color.into(),
+                out: render_target.clone(),
+                out_depth: depth.clone(),
+            },
+        );
+    }
+}
+
+pub struct Lamp<R: gfx::Resources> {
+    pub vertex_buffer: Buffer<R, Vertex>,
+    pub slice: gfx::Slice<R>,
+    pub model_mat: cgmath::Matrix4<f32>,
+    pub color: cgmath::Vector3<f32>,
+}
+
+impl<R: gfx::Resources> Lamp<R> {
+    pub fn new<F>(
+        factory: &mut F,
+        vertices: Vec<Vertex>,
+        model_mat: cgmath::Matrix4<f32>,
+        color: cgmath::Vector3<f32>,
+    ) -> Lamp<R>
+    where
+        F: gfx::Factory<R>,
+    {
+        let (vertex_buffer, slice) =
+            factory.create_vertex_buffer_with_slice(vertices.as_slice(), ());
+        Lamp {
+            vertex_buffer,
+            slice,
+            model_mat,
+            color,
+        }
+    }
 }

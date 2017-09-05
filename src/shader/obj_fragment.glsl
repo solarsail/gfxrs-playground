@@ -13,10 +13,7 @@ uniform Light {
     vec3 light_pos;
 };
 
-uniform Material {
-    float material_shininess;
-};
-
+uniform float material_shininess;
 uniform sampler2D material_diffuse;
 uniform sampler2D material_specular;
 

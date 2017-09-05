@@ -10,6 +10,7 @@ pub enum MovementDirection {
     Right,
 }
 
+#[derive(Debug, Clone)]
 pub struct Camera {
     pos: Point3<f32>,
     front: Vector3<f32>,
