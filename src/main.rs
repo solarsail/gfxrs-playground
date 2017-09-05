@@ -36,7 +36,7 @@ fn main() {
         .with_dimensions(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32);
 
     // gfx-rs init
-    let (window, mut device, mut factory, render_target, depth_stencil) =
+    let (window, mut device, mut factory, mut render_target, mut depth_stencil) =
         gfx_window_glutin::init::<render::ColorFormat, render::DepthFormat>(
             builder,
             context,
@@ -129,6 +129,11 @@ fn main() {
                     }
                     Resized(w, h) => {
                         context.update_dimensions(w, h);
+                        gfx_window_glutin::update_views(
+                            &window,
+                            &mut render_target,
+                            &mut depth_stencil,
+                        );
                     }
                     _ => {}
                 }
@@ -152,12 +157,12 @@ fn main() {
         cube_brush.draw(
             &cube,
             &obj_light,
-            &camera,
+            camera,
             &render_target,
             &depth_stencil,
             &mut encoder,
         );
-        lamp_brush.draw(&lamp, &camera, &render_target, &depth_stencil, &mut encoder);
+        lamp_brush.draw(&lamp, camera, &render_target, &depth_stencil, &mut encoder);
         encoder.flush(&mut device);
         window.swap_buffers().unwrap();
         device.cleanup();

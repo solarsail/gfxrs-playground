@@ -61,7 +61,7 @@ impl CameraSystem {
         self.camera.pos()
     }
 
-    pub fn camera(&self) -> Camera {
-        self.camera.clone()
+    pub fn camera(&self) -> &Camera {
+        &self.camera
     }
 }
