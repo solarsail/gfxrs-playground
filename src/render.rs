@@ -4,7 +4,7 @@ use find_folder::Search;
 use gfx::handle::{Buffer, DepthStencilView, RenderTargetView, Sampler, ShaderResourceView};
 use gfx::format::Formatted;
 use gfx::traits::FactoryExt;
-use cgmath;
+use cgmath::{Matrix4, Vector3};
 use camera::Camera;
 
 pub type ColorFormat = gfx::format::Srgba8;
@@ -27,12 +27,9 @@ gfx_defines! {
     }
 
     constant Light {
-        ambient: [f32; 3] = "light_ambient",
-        padding1: f32 = "pad1", // prevents the shader/code offset mismatcherror
-        diffuse: [f32; 3] = "light_diffuse",
-        padding2: f32 = "pad2", // prevents the shader/code offset mismatch error
-        specular: [f32; 3] = "light_specular",
-        padding3: f32 = "pad3", // prevents the shader/code offset mismatch error
+        ambient: [f32; 4] = "light_ambient", // align with 4 * 32
+        diffuse: [f32; 4] = "light_diffuse",
+        specular: [f32; 4] = "light_specular",
         pos: [f32; 3] = "light_pos",
     }
 
@@ -64,15 +61,17 @@ impl Vertex {
 }
 
 impl Light {
-    pub fn new(ambient: [f32; 3], diffuse: [f32; 3], specular: [f32; 3], pos: [f32; 3]) -> Light {
+    pub fn new(
+        ambient: Vector3<f32>,
+        diffuse: Vector3<f32>,
+        specular: Vector3<f32>,
+        pos: Vector3<f32>,
+    ) -> Light {
         Light {
-            ambient,
-            padding1: 0.0,
-            diffuse,
-            padding2: 0.0,
-            specular,
-            padding3: 0.0,
-            pos,
+            ambient: ambient.extend(1.0).into(),
+            diffuse: diffuse.extend(1.0).into(),
+            specular: specular.extend(1.0).into(),
+            pos: pos.into(),
         }
     }
 }
@@ -188,7 +187,7 @@ impl<R: gfx::Resources> Material<R> {
 pub struct Object<R: gfx::Resources> {
     pub vertex_buffer: Buffer<R, Vertex>,
     pub slice: gfx::Slice<R>,
-    pub model_mat: cgmath::Matrix4<f32>,
+    pub model_mat: Matrix4<f32>,
     pub material: Material<R>,
 }
 
@@ -196,7 +195,7 @@ impl<R: gfx::Resources> Object<R> {
     pub fn new<F>(
         factory: &mut F,
         vertices: Vec<Vertex>,
-        model_mat: cgmath::Matrix4<f32>,
+        model_mat: Matrix4<f32>,
         material: Material<R>,
     ) -> Object<R>
     where
@@ -269,16 +268,16 @@ impl<R: gfx::Resources> LampBrush<R> {
 pub struct Lamp<R: gfx::Resources> {
     pub vertex_buffer: Buffer<R, Vertex>,
     pub slice: gfx::Slice<R>,
-    pub model_mat: cgmath::Matrix4<f32>,
-    pub color: cgmath::Vector3<f32>,
+    pub model_mat: Matrix4<f32>,
+    pub color: Vector3<f32>,
 }
 
 impl<R: gfx::Resources> Lamp<R> {
     pub fn new<F>(
         factory: &mut F,
         vertices: Vec<Vertex>,
-        model_mat: cgmath::Matrix4<f32>,
-        color: cgmath::Vector3<f32>,
+        model_mat: Matrix4<f32>,
+        color: Vector3<f32>,
     ) -> Lamp<R>
     where
         F: gfx::Factory<R>,

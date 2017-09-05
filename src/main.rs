@@ -63,7 +63,12 @@ fn main() {
     let trans = Matrix4::from_translation(light_pos);
     let scale = Matrix4::from_scale(0.2);
     let light_model = trans * scale;
-    let lamp = render::Lamp::new(&mut factory, model::vertices(), light_model, light_color.clone());
+    let lamp = render::Lamp::new(
+        &mut factory,
+        model::vertices(),
+        light_model,
+        light_color.clone(),
+    );
     let lamp_brush = render::LampBrush::new(&mut factory);
 
     // Game loop
@@ -135,16 +140,23 @@ fn main() {
         cs.run(&mut context, dt);
 
         let obj_light = render::Light::new(
-            (light_color * 0.1).into(),
-            (light_color * 0.5).into(),
-            light_color.into(),
-            light_pos.into(),
+            (light_color * 0.1),
+            (light_color * 0.5),
+            light_color,
+            light_pos,
         );
 
         let camera = cs.camera();
         encoder.clear(&render_target, render::BLACK);
         encoder.clear_depth(&depth_stencil, 1.0);
-        cube_brush.draw(&cube, &obj_light, &camera, &render_target, &depth_stencil, &mut encoder);
+        cube_brush.draw(
+            &cube,
+            &obj_light,
+            &camera,
+            &render_target,
+            &depth_stencil,
+            &mut encoder,
+        );
         lamp_brush.draw(&lamp, &camera, &render_target, &depth_stencil, &mut encoder);
         encoder.flush(&mut device);
         window.swap_buffers().unwrap();
