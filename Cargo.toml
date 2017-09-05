@@ -1,0 +1,14 @@
+[package]
+name = "learnopengl-gfxrs"
+version = "0.1.0"
+authors = ["solarsail <newleaf.lu@gmail.com>"]
+
+[dependencies]
+gfx = "0.16"
+glutin = "0.9"
+gfx_window_glutin = "0.17"
+gfx_device_gl = "0.14"
+image = "0.15"
+cgmath = "0.15"
+find_folder = "0.3"
+lazy_static = "0.2"
