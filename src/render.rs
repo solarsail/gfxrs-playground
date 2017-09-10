@@ -26,7 +26,14 @@ gfx_defines! {
         projection: [[f32; 4]; 4] = "projection",
     }
 
-    constant Light {
+    constant DirectionalLight {
+        ambient: [f32; 4] = "light_ambient", // align with 4 * 32
+        diffuse: [f32; 4] = "light_diffuse",
+        specular: [f32; 4] = "light_specular",
+        pos: [f32; 3] = "light_pos",
+    }
+
+    constant PointLight {
         ambient: [f32; 4] = "light_ambient", // align with 4 * 32
         diffuse: [f32; 4] = "light_diffuse",
         specular: [f32; 4] = "light_specular",
@@ -36,7 +43,7 @@ gfx_defines! {
     pipeline pipe {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         transform: gfx::ConstantBuffer<Transform> = "Transform",
-        light: gfx::ConstantBuffer<Light> = "Light",
+        light: gfx::ConstantBuffer<DirectionalLight> = "Light",
         // TextureSampler cannot reside in constants? 'Copy trait not implemented'
         shininess: gfx::Global<f32> = "material_shininess",
         diffuse: gfx::TextureSampler<ShaderType> = "material_diffuse",
@@ -60,14 +67,14 @@ impl Vertex {
     }
 }
 
-impl Light {
+impl DirectionalLight {
     pub fn new(
         ambient: Vector3<f32>,
         diffuse: Vector3<f32>,
         specular: Vector3<f32>,
         pos: Vector3<f32>,
-    ) -> Light {
-        Light {
+    ) -> DirectionalLight {
+        DirectionalLight {
             ambient: ambient.extend(1.0).into(),
             diffuse: diffuse.extend(1.0).into(),
             specular: specular.extend(1.0).into(),
@@ -93,7 +100,7 @@ where
 
 pub struct ObjectBrush<R: gfx::Resources> {
     transform: Buffer<R, Transform>,
-    light: Buffer<R, Light>,
+    light: Buffer<R, DirectionalLight>,
     pso: gfx::pso::PipelineState<R, pipe::Meta>,
     sampler: Sampler<R>,
 }
@@ -124,7 +131,7 @@ impl<R: gfx::Resources> ObjectBrush<R> {
     pub fn draw<C>(
         &self,
         object: &Object<R>,
-        light: &Light,
+        light: &DirectionalLight,
         camera: &Camera,
         render_target: &RenderTargetView<R, ColorFormat>,
         depth: &DepthStencilView<R, DepthFormat>,
