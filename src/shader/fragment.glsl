@@ -4,6 +4,7 @@ out vec4 FragColor;
 in vec3 Normal;
 in vec3 FragPos;
 in vec2 TexCoord;
+in mat4 ModelView;
 
 struct DirLight {
     vec4 ambient;

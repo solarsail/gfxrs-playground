@@ -53,14 +53,7 @@ gfx_defines! {
         shininess: gfx::Global<f32> = "material_shininess",
         diffuse: gfx::TextureSampler<ShaderType> = "material_diffuse",
         specular: gfx::TextureSampler<ShaderType> = "material_specular",
-        out: gfx::RenderTarget<ColorFormat> = "FragColor",
-        out_depth: gfx::DepthTarget<DepthFormat> = gfx::preset::depth::LESS_EQUAL_WRITE,
-    }
-
-    pipeline lamp_pipe {
-        vbuf: gfx::VertexBuffer<Vertex> = (),
-        transform: gfx::ConstantBuffer<Transform> = "Transform",
-        color: gfx::Global<[f32; 3]> = "light_color",
+        view_pos: gfx::Global<[f32; 3]> = "viewPos",
         out: gfx::RenderTarget<ColorFormat> = "FragColor",
         out_depth: gfx::DepthTarget<DepthFormat> = gfx::preset::depth::LESS_EQUAL_WRITE,
     }
@@ -84,6 +77,23 @@ impl DirLight {
             diffuse: diffuse.extend(1.0).into(),
             specular: specular.extend(1.0).into(),
             dir: dir.extend(0.0).into(),
+        }
+    }
+}
+
+impl PointLight {
+    pub fn new(
+        ambient: Vector3<f32>,
+        diffuse: Vector3<f32>,
+        specular: Vector3<f32>,
+        pos: Vector3<f32>,
+    ) -> PointLight {
+        PointLight {
+            ambient: ambient.extend(1.0).into(),
+            diffuse: diffuse.extend(1.0).into(),
+            specular: specular.extend(1.0).into(),
+            pos: pos.extend(1.0).into(),
+            a0: 1.0, a1: 0.09, a2: 0.032, pad: 0.0,
         }
     }
 }
@@ -157,7 +167,7 @@ impl<R: gfx::Resources> ObjectBrush<R> {
             },
         );
         encoder.update_constant_buffer(&self.dir_light, &dir_light);
-        encoder.update_buffer(&self.point_lights, &point_lights.as_slice(), 0);
+        encoder.update_buffer(&self.point_lights, &point_lights.as_slice(), 0).unwrap();
         encoder.draw(
             &object.slice,
             &self.pso,
@@ -169,6 +179,7 @@ impl<R: gfx::Resources> ObjectBrush<R> {
                 shininess: object.material.shininess,
                 diffuse: (object.material.diffuse.clone(), self.sampler.clone()),
                 specular: (object.material.specular.clone(), self.sampler.clone()),
+                view_pos: camera.pos().into(),
                 out: render_target.clone(),
                 out_depth: depth.clone(),
             },
@@ -176,6 +187,7 @@ impl<R: gfx::Resources> ObjectBrush<R> {
     }
 }
 
+#[derive(Clone)]
 pub struct Material<R: gfx::Resources> {
     pub diffuse: ShaderResourceView<R, ShaderType>,
     pub specular: ShaderResourceView<R, ShaderType>,
@@ -230,83 +242,3 @@ impl<R: gfx::Resources> Object<R> {
     }
 }
 
-pub struct LampBrush<R: gfx::Resources> {
-    transform: Buffer<R, Transform>,
-    pso: gfx::pso::PipelineState<R, lamp_pipe::Meta>,
-}
-
-impl<R: gfx::Resources> LampBrush<R> {
-    pub fn new<F>(factory: &mut F) -> LampBrush<R>
-    where
-        F: gfx::Factory<R>,
-    {
-        let transform = factory.create_constant_buffer(1);
-        let pso = factory
-            .create_pipeline_simple(
-                include_bytes!("shader/light_vertex.glsl"),
-                include_bytes!("shader/light_fragment.glsl"),
-                lamp_pipe::new(),
-            )
-            .expect("Cannot create PSO for lamp");
-        LampBrush { transform, pso }
-    }
-
-    pub fn draw<C>(
-        &self,
-        lamp: &Lamp<R>,
-        camera: &Camera,
-        render_target: &RenderTargetView<R, ColorFormat>,
-        depth: &DepthStencilView<R, DepthFormat>,
-        encoder: &mut gfx::Encoder<R, C>,
-    ) where
-        C: gfx::CommandBuffer<R>,
-    {
-        encoder.update_constant_buffer(
-            &self.transform,
-            &Transform {
-                model: lamp.model_mat.into(),
-                view: camera.view_matrix().into(),
-                projection: camera.projection_matrix().into(),
-            },
-        );
-        encoder.draw(
-            &lamp.slice,
-            &self.pso,
-            &lamp_pipe::Data {
-                vbuf: lamp.vertex_buffer.clone(),
-                transform: self.transform.clone(),
-                color: lamp.color.into(),
-                out: render_target.clone(),
-                out_depth: depth.clone(),
-            },
-        );
-    }
-}
-
-pub struct Lamp<R: gfx::Resources> {
-    pub vertex_buffer: Buffer<R, Vertex>,
-    pub slice: gfx::Slice<R>,
-    pub model_mat: Matrix4<f32>,
-    pub color: Vector3<f32>,
-}
-
-impl<R: gfx::Resources> Lamp<R> {
-    pub fn new<F>(
-        factory: &mut F,
-        vertices: Vec<Vertex>,
-        model_mat: Matrix4<f32>,
-        color: Vector3<f32>,
-    ) -> Lamp<R>
-    where
-        F: gfx::Factory<R>,
-    {
-        let (vertex_buffer, slice) =
-            factory.create_vertex_buffer_with_slice(vertices.as_slice(), ());
-        Lamp {
-            vertex_buffer,
-            slice,
-            model_mat,
-            color,
-        }
-    }
-}

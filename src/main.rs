@@ -53,6 +53,10 @@ fn main() {
         "textures/container2_specular.png",
         32.0,
     );
+    let mut cubes = Vec::new();
+    for pos in model::cube_positions().into_iter() {
+        cubes.push(render::Object::new(&mut factory, model::vertices(), Matrix4::from_translation(pos), material.clone()));
+    }
     let cube = render::Object::new(
         &mut factory,
         model::vertices(),
@@ -61,18 +65,31 @@ fn main() {
     );
     let cube_brush = render::ObjectBrush::new(&mut factory);
 
-    let light_pos = Vector3::new(1.2, 1.0, 2.0);
+    // positions of the point lights
+    let point_light_positions = vec![
+        Vector3::new( 0.7,  0.2,  2.0),
+        Vector3::new( 2.3, -3.3, -4.0),
+        Vector3::new(-4.0,  2.0, -12.0),
+        Vector3::new( 0.0,  0.0, -3.0)
+    ];
+
+    let light_dir = Vector3::new(1.2, 1.0, 2.0);
     let light_color = Vector3::new(1.0, 1.0, 1.0);
-    let trans = Matrix4::from_translation(light_pos);
+    let trans = Matrix4::from_translation(light_dir);
     let scale = Matrix4::from_scale(0.2);
     let light_model = trans * scale;
-    let lamp = render::Lamp::new(
-        &mut factory,
-        model::vertices(),
-        light_model,
-        light_color.clone(),
+
+    let dir_light = render::DirLight::new(
+        (light_color * 0.1),
+        (light_color * 0.5),
+        light_color,
+        light_dir,
     );
-    let lamp_brush = render::LampBrush::new(&mut factory);
+
+    let mut point_lights = Vec::new();
+    for pos in point_light_positions.iter() {
+        point_lights.push(render::PointLight::new(light_color * 0.1, light_color * 0.5, light_color, pos.clone()));
+    }
 
     // Game loop
     //let start_time = time::Instant::now();
@@ -147,25 +164,19 @@ fn main() {
         //let elapsed = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1e9;
         cs.run(&mut context, dt);
 
-        let obj_light = render::Light::new(
-            (light_color * 0.1),
-            (light_color * 0.5),
-            light_color,
-            light_pos,
-        );
 
         let camera = cs.camera();
         encoder.clear(&render_target, render::BLACK);
         encoder.clear_depth(&depth_stencil, 1.0);
         cube_brush.draw(
             &cube,
-            &obj_light,
+            &dir_light,
+            &point_lights,
             camera,
             &render_target,
             &depth_stencil,
             &mut encoder,
         );
-        lamp_brush.draw(&lamp, camera, &render_target, &depth_stencil, &mut encoder);
         encoder.flush(&mut device);
         window.swap_buffers().unwrap();
         device.cleanup();
