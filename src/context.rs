@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 use cgmath::{Point2, Vector2};
 use glutin::{GlWindow, VirtualKeyCode};
+use gfx::handle::{DepthStencilView, RenderTargetView};
+use gfx_device_gl::Resources as R;
+use render;
 
 
 pub struct KeyState {
@@ -9,9 +12,7 @@ pub struct KeyState {
 
 impl KeyState {
     pub fn new() -> KeyState {
-        KeyState {
-            pressed: HashSet::new(),
-        }
+        KeyState { pressed: HashSet::new() }
     }
 
     pub fn update_key(&mut self, key: VirtualKeyCode, pressed: bool) {
@@ -72,16 +73,25 @@ impl MouseState {
 }
 
 pub struct Context<'w> {
-    window: &'w GlWindow,
+    pub window: &'w GlWindow,
     pub key_state: KeyState,
     pub mouse_state: MouseState,
     pub screen_width: i32,
     pub screen_height: i32,
     mouse_reset: bool,
+    pub render_target: RenderTargetView<R, render::ColorFormat>,
+    pub depth_stencil: DepthStencilView<R, render::DepthFormat>,
+    pub running: bool,
 }
 
 impl<'w> Context<'w> {
-    pub fn new(window: &'w GlWindow, screen_width: i32, screen_height: i32) -> Context<'w> {
+    pub fn new(
+        window: &'w GlWindow,
+        screen_width: i32,
+        screen_height: i32,
+        render_target: RenderTargetView<R, render::ColorFormat>,
+        depth_stencil: DepthStencilView<R, render::DepthFormat>,
+    ) -> Context<'w> {
         let mut ctx = Context {
             window,
             key_state: KeyState::new(),
@@ -89,6 +99,9 @@ impl<'w> Context<'w> {
             screen_width,
             screen_height,
             mouse_reset: true,
+            render_target,
+            depth_stencil,
+            running: true,
         };
         ctx.reset_mouse_pos();
         ctx
@@ -112,15 +125,19 @@ impl<'w> Context<'w> {
     }
 
     pub fn reset_mouse_pos(&mut self) {
-        self.mouse_state
-            .update_position(self.screen_width / 2, self.screen_height / 2);
+        self.mouse_state.update_position(
+            self.screen_width / 2,
+            self.screen_height / 2,
+        );
     }
 
     pub fn update_dimensions(&mut self, width: u32, height: u32) {
         self.screen_width = width as i32;
         self.screen_height = height as i32;
-        self.mouse_state
-            .update_center(self.screen_width / 2, self.screen_height / 2);
+        self.mouse_state.update_center(
+            self.screen_width / 2,
+            self.screen_height / 2,
+        );
         println!("> resized: {} x {}", width, height);
     }
 

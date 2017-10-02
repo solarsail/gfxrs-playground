@@ -1,5 +1,5 @@
 [package]
-name = "learnopengl-gfxrs"
+name = "light-casters"
 version = "0.1.0"
 authors = ["solarsail <newleaf.lu@gmail.com>"]
 
@@ -14,3 +14,4 @@ find_folder = "0.3"
 lazy_static = "0.2"
 structopt = "0.1"
 structopt-derive = "0.1"
+spin_sleep = "0.3"
