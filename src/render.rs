@@ -26,17 +26,29 @@ gfx_defines! {
         projection: [[f32; 4]; 4] = "projection",
     }
 
-    constant Light {
-        ambient: [f32; 4] = "light_ambient", // align with 4 * 32
-        diffuse: [f32; 4] = "light_diffuse",
-        specular: [f32; 4] = "light_specular",
-        pos: [f32; 3] = "light_pos",
+    constant DirLight {
+        ambient: [f32; 4] = "ambient", // align with 4 * 32
+        diffuse: [f32; 4] = "diffuse",
+        specular: [f32; 4] = "specular",
+        dir: [f32; 4] = "dir",
+    }
+
+    constant PointLight {
+        ambient: [f32; 4] = "ambient", // align with 4 * 32
+        diffuse: [f32; 4] = "diffuse",
+        specular: [f32; 4] = "specular",
+        pos: [f32; 4] = "pos",
+        a0: f32 = "a0",
+        a1: f32 = "a1",
+        a2: f32 = "a2",
+        pad: f32 = "pad",
     }
 
     pipeline pipe {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         transform: gfx::ConstantBuffer<Transform> = "Transform",
-        light: gfx::ConstantBuffer<Light> = "Light",
+        dir_light: gfx::ConstantBuffer<DirLight> = "dirLight",
+        point_lights: gfx::ConstantBuffer<PointLight> = "pointLights",
         // TextureSampler cannot reside in constants? 'Copy trait not implemented'
         shininess: gfx::Global<f32> = "material_shininess",
         diffuse: gfx::TextureSampler<ShaderType> = "material_diffuse",
@@ -60,18 +72,18 @@ impl Vertex {
     }
 }
 
-impl Light {
+impl DirLight {
     pub fn new(
         ambient: Vector3<f32>,
         diffuse: Vector3<f32>,
         specular: Vector3<f32>,
-        pos: Vector3<f32>,
-    ) -> Light {
-        Light {
+        dir: Vector3<f32>,
+    ) -> DirLight {
+        DirLight {
             ambient: ambient.extend(1.0).into(),
             diffuse: diffuse.extend(1.0).into(),
             specular: specular.extend(1.0).into(),
-            pos: pos.into(),
+            dir: dir.extend(0.0).into(),
         }
     }
 }
@@ -93,7 +105,8 @@ where
 
 pub struct ObjectBrush<R: gfx::Resources> {
     transform: Buffer<R, Transform>,
-    light: Buffer<R, Light>,
+    dir_light: Buffer<R, DirLight>,
+    point_lights: Buffer<R, PointLight>,
     pso: gfx::pso::PipelineState<R, pipe::Meta>,
     sampler: Sampler<R>,
 }
@@ -104,7 +117,8 @@ impl<R: gfx::Resources> ObjectBrush<R> {
         F: gfx::Factory<R>,
     {
         let transform = factory.create_constant_buffer(1);
-        let light = factory.create_constant_buffer(1);
+        let dir_light = factory.create_constant_buffer(1);
+        let point_lights = factory.create_constant_buffer(4);
         let pso = factory
             .create_pipeline_simple(
                 include_bytes!("shader/obj_vertex.glsl"),
@@ -115,7 +129,8 @@ impl<R: gfx::Resources> ObjectBrush<R> {
         let sampler = factory.create_sampler_linear();
         ObjectBrush {
             transform,
-            light,
+            dir_light,
+            point_lights,
             pso,
             sampler,
         }
@@ -124,7 +139,8 @@ impl<R: gfx::Resources> ObjectBrush<R> {
     pub fn draw<C>(
         &self,
         object: &Object<R>,
-        light: &Light,
+        dir_light: &DirLight,
+        point_lights: &Vec<PointLight>,
         camera: &Camera,
         render_target: &RenderTargetView<R, ColorFormat>,
         depth: &DepthStencilView<R, DepthFormat>,
@@ -140,14 +156,16 @@ impl<R: gfx::Resources> ObjectBrush<R> {
                 projection: camera.projection_matrix().into(),
             },
         );
-        encoder.update_constant_buffer(&self.light, &light);
+        encoder.update_constant_buffer(&self.dir_light, &dir_light);
+        encoder.update_buffer(&self.point_lights, &point_lights.as_slice(), 0);
         encoder.draw(
             &object.slice,
             &self.pso,
             &pipe::Data {
                 vbuf: object.vertex_buffer.clone(),
                 transform: self.transform.clone(),
-                light: self.light.clone(),
+                dir_light: self.dir_light.clone(),
+                point_lights: self.point_lights.clone(),
                 shininess: object.material.shininess,
                 diffuse: (object.material.diffuse.clone(), self.sampler.clone()),
                 specular: (object.material.specular.clone(), self.sampler.clone()),
