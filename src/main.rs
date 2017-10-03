@@ -25,10 +25,11 @@ mod model;
 mod camera;
 mod context;
 mod system;
+mod app;
 
-use system::CameraSystem;
-use context::Context;
+use system::{CameraSystem, SysEventSystem, System};
 use camera::CameraBuilder;
+use app::App;
 
 
 const SCREEN_WIDTH: i32 = 1024;
@@ -48,19 +49,7 @@ struct Opt {
 fn main() {
     let opt = Opt::from_args();
 
-    let mut events_loop = glutin::EventsLoop::new();
-    let context = glutin::ContextBuilder::new();
-    let builder = glutin::WindowBuilder::new()
-        .with_title("Learn OpenGL".to_string())
-        .with_dimensions(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32);
-
-    // gfx-rs init
-    let (window, mut device, mut factory, render_target, depth_stencil) =
-        gfx_window_glutin::init::<render::ColorFormat, render::DepthFormat>(
-            builder,
-            context,
-            &events_loop,
-        );
+    let (mut device, mut factory, events_loop, mut ctx) = App::init("Learn OpenGL", 1024, 768);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 
     let material = render::Material::new(
@@ -142,31 +131,26 @@ fn main() {
         .build();
 
 
-    let mut context = Context::new(
-        &window,
-        SCREEN_WIDTH,
-        SCREEN_HEIGHT,
-        render_target,
-        depth_stencil,
-    );
     let mut cs = CameraSystem::new(camera, 0.1);
+    let mut es = SysEventSystem::new(events_loop);
 
-    while context.running {
+    while ctx.running {
         let delta = loop_helper.loop_start(); // or .loop_start_s() for f64 seconds
         //let elapsed = current_frame.duration_since(start_time);
-        events_loop.poll_events(|event| { update(event, &mut context); });
+        //context.events_loop.poll_events(|event| { update(event, &mut context); });
 
         let dt = delta.as_secs() as f32 + delta.subsec_nanos() as f32 / 1e9;
         //let elapsed = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1e9;
-        cs.run(&mut context, dt);
+        es.run(&mut ctx, dt);
+        cs.run(&mut ctx, dt);
 
         if let Some(fps) = loop_helper.report_rate() {
             current_fps = Some(fps);
         }
 
         let camera = cs.camera();
-        encoder.clear(&context.render_target, render::BG);
-        encoder.clear_depth(&context.depth_stencil, 1.0);
+        encoder.clear(&ctx.render_target, render::BG);
+        encoder.clear_depth(&ctx.depth_stencil, 1.0);
         for cube in cubes.iter() {
             cube_brush.draw(
                 &cube,
@@ -174,8 +158,8 @@ fn main() {
                 &point_lights,
                 &light_args,
                 camera,
-                &context.render_target,
-                &context.depth_stencil,
+                &ctx.render_target,
+                &ctx.depth_stencil,
                 &mut encoder,
             );
         }
@@ -183,63 +167,14 @@ fn main() {
             lamp_brush.draw(
                 &lamp,
                 camera,
-                &context.render_target,
-                &context.depth_stencil,
+                &ctx.render_target,
+                &ctx.depth_stencil,
                 &mut encoder,
             );
         }
         encoder.flush(&mut device);
-        window.swap_buffers().unwrap();
+        ctx.window.swap_buffers().unwrap();
         device.cleanup();
         loop_helper.loop_sleep(); // sleeps to acheive a 60 FPS rate
-    }
-}
-
-fn update(event: glutin::Event, ctx: &mut Context) {
-    use glutin::WindowEvent::*;
-    use glutin::{MouseScrollDelta, VirtualKeyCode};
-    use glutin::ElementState::*;
-    if let glutin::Event::WindowEvent { event, .. } = event {
-        match event {
-            Closed => {
-                ctx.running = false; // cannot `break` in closure
-            }
-            KeyboardInput {
-                input: glutin::KeyboardInput {
-                    state,
-                    virtual_keycode: Some(vk),
-                    ..
-                },
-                ..
-            } => {
-                match (state, vk) {
-                    (_, VirtualKeyCode::Escape) => ctx.running = false,
-                    _ => {
-                        ctx.key_state.update_key(vk, state == Pressed);
-                    }
-                }
-            }
-            MouseMoved { position: (x, y), .. } => {
-                ctx.update_mouse_pos(x as i32, y as i32);
-            }
-            Focused(true) => {
-                ctx.focused();
-            }
-            MouseEntered { .. } => {
-                ctx.mouse_entered();
-            }
-            MouseWheel { delta: MouseScrollDelta::LineDelta(_, dy), .. } => {
-                ctx.mouse_state.update_scroll(dy);
-            }
-            Resized(w, h) => {
-                ctx.update_dimensions(w, h);
-                gfx_window_glutin::update_views(
-                    &ctx.window,
-                    &mut ctx.render_target,
-                    &mut ctx.depth_stencil,
-                );
-            }
-            _ => {}
-        }
     }
 }

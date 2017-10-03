@@ -72,8 +72,8 @@ impl MouseState {
     }
 }
 
-pub struct Context<'w> {
-    pub window: &'w GlWindow,
+pub struct Context {
+    pub window: GlWindow,
     pub key_state: KeyState,
     pub mouse_state: MouseState,
     pub screen_width: i32,
@@ -84,14 +84,14 @@ pub struct Context<'w> {
     pub running: bool,
 }
 
-impl<'w> Context<'w> {
+impl Context {
     pub fn new(
-        window: &'w GlWindow,
+        window: GlWindow,
         screen_width: i32,
         screen_height: i32,
         render_target: RenderTargetView<R, render::ColorFormat>,
         depth_stencil: DepthStencilView<R, render::DepthFormat>,
-    ) -> Context<'w> {
+    ) -> Context {
         let mut ctx = Context {
             window,
             key_state: KeyState::new(),

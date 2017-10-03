@@ -3,6 +3,7 @@ use glutin::VirtualKeyCode;
 use cgmath::{Matrix4, Point3};
 use camera::{Camera, MovementDirection as MD};
 use context::Context;
+use system::System;
 
 lazy_static! {
     static ref KEY_MAP: HashMap<VirtualKeyCode, MD> = {
@@ -32,7 +33,26 @@ impl CameraSystem {
         }
     }
 
-    pub fn run(&mut self, ctx: &mut Context, dt: f32) {
+    pub fn projection_matrix(&self) -> Matrix4<f32> {
+        self.camera.projection_matrix()
+    }
+
+    pub fn view_matrix(&self) -> Matrix4<f32> {
+        self.camera.view_matrix()
+    }
+
+    #[allow(dead_code)]
+    pub fn position(&self) -> Point3<f32> {
+        self.camera.pos()
+    }
+
+    pub fn camera(&self) -> &Camera {
+        &self.camera
+    }
+}
+
+impl System for CameraSystem {
+    fn run(&mut self, ctx: &mut Context, dt: f32) {
         self.camera.update_aspect(
             ctx.screen_width as f32,
             ctx.screen_height as f32,
@@ -50,22 +70,5 @@ impl CameraSystem {
         self.camera.zoom(ctx.mouse_state.drain_scroll());
         self.camera.move_for(dt);
         ctx.reset_mouse_pos();
-    }
-
-    pub fn projection_matrix(&self) -> Matrix4<f32> {
-        self.camera.projection_matrix()
-    }
-
-    pub fn view_matrix(&self) -> Matrix4<f32> {
-        self.camera.view_matrix()
-    }
-
-    #[allow(dead_code)]
-    pub fn position(&self) -> Point3<f32> {
-        self.camera.pos()
-    }
-
-    pub fn camera(&self) -> &Camera {
-        &self.camera
     }
 }
